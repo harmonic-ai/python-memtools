@@ -25,11 +25,10 @@ Once you have a memory snapshot, you can analyze it by running `./python-memtool
 Some of the more commonly useful shell commands are:
 * `repr <ADDRESS>`: Shows the contents of the object at `<ADDRESS>`. This can show the keys and values in a dict, items in a list, set, or tuple, local variables in a stack frame object, etc. When an object is found by one of the below commands, the address of that object (which can be used with `repr`) is the 16-digit hex number following the `@` after the object. This command has many options; run `help` in the shell to see what they are.
 * `count-by-type`: Counts the number of objects of each type. If you see a surprisingly large number of objects of some type, that could indicate a memory leak.
+* `aggregate-strings [--bytes]`: Finds all str or bytes objects and produces a histogram of their lengths. This can also be used to find all str or bytes objects whose lengths are in a specified range.
 * `async-task-graph`: Finds all asyncio tasks and shows what they're waiting on, organized into a list of trees. If you ever see `<!seen>` in the output here, that indicates a deadlocked cycle of tasks awaiting each other!
 * `find-all-stacks`: Finds all execution frames and organizes them into stacktraces. This is similar to what `py-spy dump` does.
-* `find-all-objects --type-name=<NAME>`: Finds all objects of the specified type. Generally this is most useful for the `frame` type; if you see a lot of suspended frames in the httpx library, for example, that probably means your program is waiting on many HTTP responses from some remote service.
-* `find-all-objects --type-name=coroutine`: Finds all coroutine objects. Note that coroutines are distinct from asyncio Tasks, and there is usually not a 1:1 mapping of Tasks to coroutines.
-* `aggregate-strings`: Finds all str or bytes objects and produces a histogram of their lengths.
+* `find-all-objects --type-name=<NAME>`: Finds all objects of the specified type. Generally this is most useful for the `frame` type; if you see a lot of suspended frames in the httpx library, for example, that probably means your program is waiting on many HTTP responses from some remote service. This is also useful to find intermediate coroutines (as distinct from asyncio Tasks - there is usually not a 1:1 mapping of Tasks to coroutines).
 * `find-module <NAME>`: Finds a module object. This is useful if you want to see the values of module-level global variables. If you want to get the list of all loaded modules, use `find-module sys` and look at the `modules` dict within it. (You can then use `repr` to see the contents of a specific module from that dict.)
 
 For more advanced debugging, you can inspect raw memory with these commands:
