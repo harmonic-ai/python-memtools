@@ -1,5 +1,7 @@
 #include "PySetObject.hh"
 
+#include <algorithm>
+
 std::vector<MappedPtr<PyObject>> PySetObject::get_items(const MemoryReader& r) const {
   std::vector<MappedPtr<PyObject>> ret;
   auto entries_r = this->read_entries(r);

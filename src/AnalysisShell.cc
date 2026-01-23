@@ -1,6 +1,7 @@
 #include <readline/history.h>
 #include <readline/readline.h>
 
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <phosg/Arguments.hh>

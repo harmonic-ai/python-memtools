@@ -1,5 +1,7 @@
 #include "PyDictObject.hh"
 
+#include <algorithm>
+
 const char* PyDictKeyEntry::invalid_reason(const MemoryReader& r, bool is_split) const {
   if (!r.obj_valid(this->me_key)) {
     return "invalid_key";

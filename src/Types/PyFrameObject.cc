@@ -1,5 +1,7 @@
 #include "PyFrameObject.hh"
 
+#include <algorithm>
+
 const char* PyFrameObject::invalid_reason(const Environment& env) const {
   if (this->f_state < PyFrameState::FRAME_CREATED || this->f_state > PyFrameState::FRAME_CLEARED) {
     return "invalid_f_state";
@@ -37,7 +39,6 @@ const char* PyFrameObject::invalid_reason(const Environment& env) const {
       return ir;
     }
 
-    auto addr = env.r.host_to_mapped(this);
     const auto& varnames = env.r.get(code.co_varnames);
 
     if (!env.r.exists_range(env.r.host_to_mapped(this), sizeof(*this) + varnames.ob_size * sizeof(MappedPtr<PyObject>))) {
@@ -123,7 +124,6 @@ std::unordered_map<MappedPtr<PyObject>, MappedPtr<PyObject>> PyFrameObject::loca
     throw invalid_object(ir);
   }
 
-  auto addr = env.r.host_to_mapped(this);
   const auto& varnames = env.r.get(code_obj.co_varnames);
 
   std::unordered_map<MappedPtr<PyObject>, MappedPtr<PyObject>> ret;
