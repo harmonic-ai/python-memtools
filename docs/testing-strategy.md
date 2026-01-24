@@ -12,8 +12,8 @@ This document describes a five-tier testing strategy for python-memtools, from f
 - Run `tests/run_tests.py --tier 1 --version 310` and `tests/run_tests.py --tier 1 --version 314`.
 - Extend smoke validation to include a short command set:
   - `count-by-type`
-  - `find-all-objects --type-name=dict --max-results=3`
-  - `repr <ADDRESS>` for a known dict
+  - `find-all-objects --type-name=dict --count`
+  - `repr <ADDRESS>` for a known dict and type
   - `aggregate-strings --print-smaller-than=32 --print-larger-than=0`
 
 ## Tier 2: Golden Snapshot Tests (layout validation)
@@ -24,7 +24,7 @@ This document describes a five-tier testing strategy for python-memtools, from f
 - Compare outputs against goldens:
   - `tests/run_tests.py --tier 2 --version 310`
   - `tests/run_tests.py --tier 2 --version 314`
-- To refresh goldens, run with `MODE=record`.
+- To refresh goldens, run with `--golden-mode record` (or set `MODE=record`).
 
 ## Tier 3: Targeted Layout Tests
 - Run layout validation on a focused set of types using the analyzer itself:
@@ -41,7 +41,7 @@ This document describes a five-tier testing strategy for python-memtools, from f
 - Async deadlocks: `tests/run_tests.py --tier 4 --version 310` runs `async-task-graph` against
   `examples/async-stall.py` and looks for cycle markers; `tests/run_tests.py --tier 4 --version 314` verifies futures are discovered.
 - Memory leak scenario: `tests/run_tests.py --tier 4 --version 310` and `tests/run_tests.py --tier 4 --version 314` validate `find-references` against
-  `tests/fixture_memory_leak.py`.
+  an embedded leak fixture.
 - Stacks/frames: `tests/run_tests.py --tier 4 --version 310` and `tests/run_tests.py --tier 4 --version 314` validate `find-all-stacks` on a controlled call stack.
 
 ## Tier 5: Robustness and Fuzz

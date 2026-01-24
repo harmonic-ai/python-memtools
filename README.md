@@ -171,6 +171,17 @@ python-memtools is a work in progress. We've found it very useful so far to debu
 
 ## Tests
 
-There are simple smoke tests for the 3.10 and 3.14 builds. They require Linux and use a helper that dumps a child process via `process_vm_readv`, so they do not require root:
+Tests require Linux and use a helper that dumps a child process via `process_vm_readv`.
+See `docs/testing-strategy.md` for the full breakdown and rationale.
 
-    tests/run_tests.py --tier all --version both
+Run everything:
+
+    python3 tests/run_tests.py --tier all --version both
+
+Run a specific tier/version:
+
+    python3 tests/run_tests.py --tier 3 --version 314
+
+Record golden outputs:
+
+    python3 tests/run_tests.py --tier 2 --version 314 --golden-mode record
