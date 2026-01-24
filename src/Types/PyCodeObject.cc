@@ -2,6 +2,50 @@
 #include "PyStringObjects.hh"
 
 const char* PyCodeObject::invalid_reason(const Environment& env) const {
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+  if (!env.r.obj_valid_or_null(this->co_consts, 1)) {
+    return "invalid_co_consts";
+  }
+  if (!env.r.obj_valid_or_null(this->co_names, 1)) {
+    return "invalid_co_names";
+  }
+  if (!env.r.obj_valid_or_null(this->co_exceptiontable, 1)) {
+    return "invalid_co_exceptiontable";
+  }
+  if (!env.r.obj_valid_or_null(this->co_localsplusnames, 1)) {
+    return "invalid_co_localsplusnames";
+  }
+  if (!env.r.obj_valid_or_null(this->co_localspluskinds, 1)) {
+    return "invalid_co_localspluskinds";
+  }
+  if (!env.r.obj_valid_or_null(this->co_filename, 1)) {
+    return "invalid_co_filename";
+  }
+  if (!env.r.obj_valid_or_null(this->co_name, 1)) {
+    return "invalid_co_name";
+  }
+  if (!env.r.obj_valid_or_null(this->co_qualname, 1)) {
+    return "invalid_co_qualname";
+  }
+  if (!env.r.obj_valid_or_null(this->co_linetable, 1)) {
+    return "invalid_co_linetable";
+  }
+  if (!env.r.obj_valid_or_null(this->co_weakreflist, 1)) {
+    return "invalid_co_weakreflist";
+  }
+  if (!this->co_executors.is_null() && !env.r.exists(this->co_executors)) {
+    return "invalid_co_executors";
+  }
+  if (!this->_co_cached.is_null() && !env.r.exists(this->_co_cached)) {
+    return "invalid__co_cached";
+  }
+  if (!this->_co_monitoring.is_null() && !env.r.exists(this->_co_monitoring)) {
+    return "invalid__co_monitoring";
+  }
+  if (!this->co_extra.is_null() && !env.r.exists(this->co_extra)) {
+    return "invalid_co_extra";
+  }
+#else
   if (!env.r.obj_valid_or_null(this->co_code, 1)) {
     return "invalid_co_code";
   }
@@ -47,6 +91,7 @@ const char* PyCodeObject::invalid_reason(const Environment& env) const {
   if (!this->co_opcache.is_null() && !env.r.exists(this->co_opcache)) {
     return "invalid_co_opcache";
   }
+#endif
   return nullptr;
 }
 
@@ -74,6 +119,18 @@ std::string PyCodeObject::repr(Traversal& t) const {
         this->co_argcount, this->co_posonlyargcount, this->co_kwonlyargcount));
     tokens.emplace_back(std::format("vars_config=({} locals, {} stack)", this->co_nlocals, this->co_stacksize));
     tokens.emplace_back(std::format("flags={:08X}", this->co_flags));
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+    tokens.emplace_back(std::format("consts={}", t.repr(this->co_consts)));
+    tokens.emplace_back(std::format("names={}", t.repr(this->co_names)));
+    tokens.emplace_back(std::format("localsplusnames={}", t.repr(this->co_localsplusnames)));
+    tokens.emplace_back(std::format("localspluskinds={}", t.repr(this->co_localspluskinds)));
+    tokens.emplace_back(std::format("qualname={}", t.repr(this->co_qualname)));
+    t.bytes_as_hex = true;
+    tokens.emplace_back(std::format("linetable={}", t.repr(this->co_linetable)));
+    t.bytes_as_hex = prev_bytes_as_hex;
+    tokens.emplace_back(std::format("weakreflist={}", t.repr(this->co_weakreflist)));
+    tokens.emplace_back(std::format("extra=@{}", this->co_extra));
+#else
     t.bytes_as_hex = true;
     tokens.emplace_back(std::format("code={}", t.repr(this->co_code)));
     t.bytes_as_hex = prev_bytes_as_hex;
@@ -89,6 +146,7 @@ std::string PyCodeObject::repr(Traversal& t) const {
     tokens.emplace_back(std::format("zombieframe=@{}", this->co_zombieframe));
     tokens.emplace_back(std::format("weakreflist={}", t.repr(this->co_weakreflist)));
     tokens.emplace_back(std::format("extra=@{}", this->co_extra));
+#endif
   }
   if (is_root) {
     std::string joiner = "\n";

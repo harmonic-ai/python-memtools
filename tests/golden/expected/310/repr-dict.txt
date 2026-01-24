@@ -1,0 +1,10 @@
+Base type object not present in analysis data; looking for it
+Base type candidate found at ADDR
+No type objects are present in analysis data; looking for them
+{
+  'alpha': 1,
+  'beta': 2,
+  'message': 'hello memtools',
+}@ADDR
+
+

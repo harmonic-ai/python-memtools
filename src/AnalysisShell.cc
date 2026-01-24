@@ -5,11 +5,15 @@
 #include <atomic>
 #include <mutex>
 #include <phosg/Arguments.hh>
+#include <phosg/Strings.hh>
 #include <set>
+#include <unordered_set>
 
 #include "AnalysisShell.hh"
 #include "Types/PyAsyncObjects.hh"
 #include "Types/PyGeneratorObjects.hh"
+#include "Types/PyInterpreterFrame.hh"
+#include "Types/PyVersion.hh"
 #include "Types/PyThreadState.hh"
 #include "Types/PyTypeObject.hh"
 
@@ -328,6 +332,134 @@ ShellCommand c_count_by_type(
       }
     });
 
+ShellCommand c_validate_layouts(
+    "validate-layouts", "\
+  validate-layouts [OPTIONS]\n\
+    Validates object layouts by running invalid_reason checks.\n\
+    Options:\n\
+      --object-addr=ADDR[,ADDR...]: Validate only these object addresses.\n\
+      --type-name=NAME[,NAME...]: Validate only these types (comma-separated).\n",
+    +[](AnalysisShell& shell, phosg::Arguments& args) -> void {
+      std::vector<MappedPtr<PyObject>> object_addrs;
+      std::string object_addrs_arg = args.get<std::string>("object-addr", false);
+      if (!object_addrs_arg.empty()) {
+        for (const auto& addr_str : phosg::split(object_addrs_arg, ',')) {
+          if (addr_str.empty()) {
+            continue;
+          }
+          object_addrs.emplace_back(std::stoull(addr_str, nullptr, 16));
+        }
+      }
+      if (!object_addrs.empty()) {
+        size_t invalid_count = 0;
+        for (const auto& addr : object_addrs) {
+          std::string type_name = "<unknown>";
+          try {
+            const auto& obj = shell.env.r.get(addr);
+            const auto& type_obj = shell.env.r.get(obj.ob_type);
+            type_name = type_obj.name(shell.env.r);
+          } catch (const std::out_of_range&) {
+          }
+          if (const char* ir = shell.env.invalid_reason(addr)) {
+            invalid_count++;
+            phosg::fwrite_fmt(stdout, "object {} type {}: invalid {}\n", addr, type_name, ir);
+          } else {
+            phosg::fwrite_fmt(stdout, "object {} type {}: ok\n", addr, type_name);
+          }
+        }
+        if (invalid_count > 0) {
+          phosg::fwrite_fmt(stdout, "invalid objects: {}\n", invalid_count);
+        }
+        return;
+      }
+
+      std::vector<std::string> type_names;
+      std::string type_names_arg = args.get<std::string>("type-name", false);
+      if (!type_names_arg.empty()) {
+        for (const auto& name : phosg::split(type_names_arg, ',')) {
+          if (!name.empty()) {
+            type_names.emplace_back(name);
+          }
+        }
+      }
+      if (type_names.empty()) {
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+        type_names = {"dict", "list", "tuple", "set", "bytes", "str", "int", "bool", "float", "code", "type"};
+#else
+        type_names = {"dict", "list", "tuple", "set", "bytes", "str", "int", "bool", "float", "code", "type", "frame"};
+#endif
+      }
+
+      std::unordered_map<MappedPtr<PyTypeObject>, std::string> name_for_type;
+      std::unordered_set<MappedPtr<PyTypeObject>> types_to_check;
+      for (const auto& name : type_names) {
+        auto type_addr = shell.env.get_type_if_exists(name.c_str());
+        if (type_addr.is_null()) {
+          phosg::fwrite_fmt(stderr, "Type {} not present; skipping\n", name);
+          continue;
+        }
+        name_for_type.emplace(type_addr, name);
+        types_to_check.emplace(type_addr);
+      }
+      if (types_to_check.empty()) {
+        throw std::runtime_error("No types available for layout validation");
+      }
+
+      struct TypeStats {
+        size_t checked = 0;
+        size_t invalid = 0;
+        std::unordered_map<std::string, size_t> invalid_reasons;
+      };
+      std::vector<std::unordered_map<MappedPtr<PyTypeObject>, TypeStats>> thread_stats(shell.max_threads);
+
+      shell.env.r.map_all_addresses<PyObject>(
+          [&](const PyObject& obj, MappedPtr<PyObject> addr, size_t thread_index) -> void {
+            if (!types_to_check.count(obj.ob_type)) {
+              return;
+            }
+            auto& stats = thread_stats[thread_index][obj.ob_type];
+            stats.checked++;
+            if (const char* ir = shell.env.invalid_reason(addr, obj.ob_type)) {
+              stats.invalid++;
+              stats.invalid_reasons[ir]++;
+            }
+          },
+          8, shell.max_threads);
+
+      std::unordered_map<MappedPtr<PyTypeObject>, TypeStats> overall;
+      for (const auto& per_thread : thread_stats) {
+        for (const auto& [type_addr, stats] : per_thread) {
+          auto& total = overall[type_addr];
+          total.checked += stats.checked;
+          total.invalid += stats.invalid;
+          for (const auto& [reason, count] : stats.invalid_reasons) {
+            total.invalid_reasons[reason] += count;
+          }
+        }
+      }
+
+      std::vector<std::pair<std::string, TypeStats>> sorted;
+      sorted.reserve(overall.size());
+      for (const auto& [type_addr, stats] : overall) {
+        sorted.emplace_back(name_for_type.at(type_addr), stats);
+      }
+      sort(sorted.begin(), sorted.end(),
+          [](const auto& a, const auto& b) { return a.first < b.first; });
+
+      for (const auto& [name, stats] : sorted) {
+        phosg::fwrite_fmt(stdout, "type {}: checked {}, invalid {}\n", name, stats.checked, stats.invalid);
+        if (!stats.invalid_reasons.empty()) {
+          std::vector<std::pair<std::string, size_t>> reasons(
+              stats.invalid_reasons.begin(), stats.invalid_reasons.end());
+          sort(reasons.begin(), reasons.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+          for (const auto& [reason, count] : reasons) {
+            phosg::fwrite_fmt(stdout, "  reason {}: {}\n", reason, count);
+          }
+        }
+      }
+    });
+
 ShellCommand c_find_all_objects(
     "find-all-objects", "\
   find-all-objects [OPTIONS]\n\
@@ -497,6 +629,53 @@ ShellCommand c_find_all_stacks(
       --include-runnable: Include frames that were paused but later runnable.\n\
     The formatting options to the repr command are also valid here.\n",
     +[](AnalysisShell& shell, phosg::Arguments& args) -> void {
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+      std::mutex output_lock;
+      std::vector<std::vector<MappedPtr<PyInterpreterFrame>>> stacks;
+      shell.env.r.map_all_addresses<PyThreadState>(
+          [&](const PyThreadState& obj, MappedPtr<PyThreadState>, size_t) -> void {
+            if (obj.invalid_reason(shell.env)) {
+              return;
+            }
+            auto frame_addr = obj.current_frame.cast<PyInterpreterFrame>();
+            if (frame_addr.is_null()) {
+              return;
+            }
+            std::vector<MappedPtr<PyInterpreterFrame>> stack;
+            std::unordered_set<MappedPtr<PyInterpreterFrame>> seen;
+            while (!frame_addr.is_null()) {
+              if (!seen.emplace(frame_addr).second) {
+                break;
+              }
+              if (!shell.env.r.exists_range(frame_addr, sizeof(PyInterpreterFrame))) {
+                break;
+              }
+              stack.emplace_back(frame_addr);
+              const auto& frame = shell.env.r.get(frame_addr);
+              frame_addr = frame.previous;
+            }
+            if (!stack.empty()) {
+              std::lock_guard<std::mutex> g(output_lock);
+              stacks.emplace_back(std::move(stack));
+            }
+          },
+          8, shell.max_threads);
+
+      for (const auto& stack : stacks) {
+        phosg::fwrite_fmt(stderr, "Traceback (most recent call FIRST):\n");
+        auto t = shell.env.traverse(&args);
+        t.is_short = true;
+        t.recursion_depth = 1;
+        for (const auto& frame_addr : stack) {
+          for (ssize_t z = 0; z < t.recursion_depth * 2; z++) {
+            fputc(' ', stderr);
+          }
+          const auto& frame = shell.env.r.get(frame_addr);
+          phosg::fwrite_fmt(stderr, "{}\n", frame.repr(t));
+          t.recursion_depth++;
+        }
+      }
+#else
       bool include_runnable = args.get<bool>("include-runnable");
 
       MappedPtr<PyTypeObject> frame_type_addr;
@@ -571,6 +750,7 @@ ShellCommand c_find_all_stacks(
           }
         }
       }
+#endif
     });
 
 template <bool IsBytes>

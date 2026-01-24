@@ -13,6 +13,7 @@
 #include "PyStringObjects.hh"
 #include "PyTupleObject.hh"
 #include "PyTypeObject.hh"
+#include "PyVersion.hh"
 
 Environment::Environment(const std::string& data_path)
     : data_path(data_path),
@@ -102,7 +103,8 @@ const char* Environment::invalid_reason(MappedPtr<PyObject> addr, MappedPtr<PyTy
       return this->r.get(addr.cast<PyGenObject>()).invalid_reason(*this);
     } else if (obj.ob_type == this->get_type_if_exists("coroutine")) {
       return this->r.get(addr.cast<PyCoroObject>()).invalid_reason(*this);
-    } else if (obj.ob_type == this->get_type_if_exists("asyncgen")) { // TODO: This might be wrong
+    } else if ((obj.ob_type == this->get_type_if_exists("asyncgen")) ||
+        (obj.ob_type == this->get_type_if_exists("async_generator"))) {
       return this->r.get(addr.cast<PyAsyncGenObject>()).invalid_reason(*this);
 
     } else if (obj.ob_type == this->get_type_if_exists("_asyncio.Future")) {
@@ -118,6 +120,9 @@ const char* Environment::invalid_reason(MappedPtr<PyObject> addr, MappedPtr<PyTy
         return "None";
 
       } else {
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+        return nullptr;
+#else
         try {
           auto dict_addr = this->r.get(addr.offset_bytes(0x10).cast<MappedPtr<PyDictObject>>());
           const auto& dict_obj = this->r.get(dict_addr);
@@ -129,6 +134,7 @@ const char* Environment::invalid_reason(MappedPtr<PyObject> addr, MappedPtr<PyTy
         } catch (const std::out_of_range&) {
           return "dict_out_of_range";
         }
+#endif
       }
     }
   } catch (const std::out_of_range&) {
@@ -181,7 +187,8 @@ std::unordered_set<MappedPtr<void>> Environment::direct_referents(MappedPtr<PyOb
       return this->r.get(addr.cast<PyGenObject>()).direct_referents(*this);
     } else if (obj.ob_type == this->get_type_if_exists("coroutine")) {
       return this->r.get(addr.cast<PyCoroObject>()).direct_referents(*this);
-    } else if (obj.ob_type == this->get_type_if_exists("asyncgen")) { // TODO: This might be wrong
+    } else if ((obj.ob_type == this->get_type_if_exists("asyncgen")) ||
+        (obj.ob_type == this->get_type_if_exists("async_generator"))) {
       return this->r.get(addr.cast<PyAsyncGenObject>()).direct_referents(*this);
 
     } else if (obj.ob_type == this->get_type_if_exists("_asyncio.Future")) {
@@ -309,7 +316,8 @@ std::string Traversal::repr(MappedPtr<PyObject> addr) {
       ret = check_valid_and_repr.template operator()<PyGenObject>();
     } else if (obj.ob_type == this->env.get_type_if_exists("coroutine")) {
       ret = check_valid_and_repr.template operator()<PyCoroObject>();
-    } else if (obj.ob_type == this->env.get_type_if_exists("asyncgen")) { // TODO: This might be wrong
+    } else if ((obj.ob_type == this->env.get_type_if_exists("asyncgen")) ||
+        (obj.ob_type == this->env.get_type_if_exists("async_generator"))) {
       ret = check_valid_and_repr.template operator()<PyAsyncGenObject>();
 
     } else if (obj.ob_type == this->env.get_type_if_exists("_asyncio.Future")) {
@@ -326,6 +334,9 @@ std::string Traversal::repr(MappedPtr<PyObject> addr) {
         show_address = this->show_all_addresses || this->in_progress.empty();
 
       } else {
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+        ret = std::format("<{}>", type_name);
+#else
         try {
           // Only try to expand user type dicts if this is the root object
           if (!this->in_progress.empty()) {
@@ -343,6 +354,7 @@ std::string Traversal::repr(MappedPtr<PyObject> addr) {
         } catch (const std::out_of_range&) {
           ret = std::format("<{}>", type_name);
         }
+#endif
       }
     }
   } catch (const std::out_of_range&) {

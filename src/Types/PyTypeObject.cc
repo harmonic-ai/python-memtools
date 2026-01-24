@@ -18,8 +18,12 @@ bool PyTypeObject::type_name_is_valid(const std::string& name) {
 }
 
 std::string PyTypeObject::name(const MemoryReader& r) const {
-  std::string name = r.get_cstr(this->tp_name);
-  return this->type_name_is_valid(name) ? name : "";
+  try {
+    std::string name = r.get_cstr(this->tp_name);
+    return this->type_name_is_valid(name) ? name : "";
+  } catch (const std::out_of_range&) {
+    return "";
+  }
 }
 
 const char* PyTypeObject::invalid_reason(const Environment& env) const {

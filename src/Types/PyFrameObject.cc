@@ -1,7 +1,91 @@
 #include "PyFrameObject.hh"
+#include "PyInterpreterFrame.hh"
 
 #include <algorithm>
 
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+const char* PyFrameObject::invalid_reason(const Environment& env) const {
+  if (!env.r.obj_valid_or_null(this->f_back, 1)) {
+    return "invalid_f_back";
+  }
+  if (!env.r.obj_valid_or_null(this->f_trace, 1)) {
+    return "invalid_f_trace";
+  }
+  if (!env.r.obj_valid_or_null(this->f_extra_locals, 1)) {
+    return "invalid_f_extra_locals";
+  }
+  if (!env.r.obj_valid_or_null(this->f_locals_cache, 1)) {
+    return "invalid_f_locals_cache";
+  }
+  if (!env.r.obj_valid_or_null(this->f_overwritten_fast_locals, 1)) {
+    return "invalid_f_overwritten_fast_locals";
+  }
+  if (this->f_frame.is_null()) {
+    return "invalid_f_frame";
+  }
+  if (!env.r.exists_range(this->f_frame, sizeof(PyInterpreterFrame))) {
+    return "invalid_f_frame";
+  }
+  const auto& iframe = env.r.get(this->f_frame.cast<PyInterpreterFrame>());
+  if (const char* ir = iframe.invalid_reason(env)) {
+    return ir;
+  }
+  return nullptr;
+}
+
+std::unordered_set<MappedPtr<void>> PyFrameObject::direct_referents(const Environment& env) const {
+  std::unordered_set<MappedPtr<void>> ret{
+      this->f_back,
+      this->f_trace,
+      this->f_extra_locals,
+      this->f_locals_cache,
+      this->f_overwritten_fast_locals,
+  };
+  if (!this->f_frame.is_null() && env.r.exists_range(this->f_frame, sizeof(PyInterpreterFrame))) {
+    const auto& iframe = env.r.get(this->f_frame.cast<PyInterpreterFrame>());
+    ret.emplace(iframe.f_globals);
+    ret.emplace(iframe.f_builtins);
+    ret.emplace(iframe.f_locals);
+    ret.emplace(iframe.frame_obj);
+    ret.emplace(iframe.executable_code(env));
+  }
+  return ret;
+}
+
+std::string PyFrameObject::name_for_state(PyFrameState) {
+  return "unknown";
+}
+
+std::string PyFrameObject::where(Traversal& t) const {
+  if (this->f_frame.is_null()) {
+    return "!invalid_f_frame";
+  }
+  if (!t.env.r.exists_range(this->f_frame, sizeof(PyInterpreterFrame))) {
+    return "!invalid_f_frame";
+  }
+  const auto& iframe = t.env.r.get(this->f_frame.cast<PyInterpreterFrame>());
+  return iframe.repr(t);
+}
+
+std::unordered_map<MappedPtr<PyObject>, MappedPtr<PyObject>> PyFrameObject::locals(const Environment&) const {
+  return {};
+}
+
+std::vector<std::string> PyFrameObject::repr_tokens(Traversal& t) const {
+  std::vector<std::string> tokens;
+  tokens.emplace_back(this->name_for_state(PyFrameState::FRAME_EXECUTING));
+  tokens.emplace_back(std::format("where={}", this->where(t)));
+  if (!t.is_short) {
+    tokens.emplace_back(std::format("f_back={}", t.repr(this->f_back)));
+    tokens.emplace_back(std::format("f_trace={}", t.repr(this->f_trace)));
+  }
+  return tokens;
+}
+
+std::string PyFrameObject::repr(Traversal& t) const {
+  return t.token_repr<PyFrameObject>(*this, "frame");
+}
+#else
 const char* PyFrameObject::invalid_reason(const Environment& env) const {
   if (this->f_state < PyFrameState::FRAME_CREATED || this->f_state > PyFrameState::FRAME_CLEARED) {
     return "invalid_f_state";
@@ -180,3 +264,4 @@ std::vector<std::string> PyFrameObject::repr_tokens(Traversal& t) const {
 std::string PyFrameObject::repr(Traversal& t) const {
   return t.token_repr<PyFrameObject>(*this, "frame");
 }
+#endif

@@ -4,7 +4,7 @@ python-memtools is a memory analyzer for Python programs running on Linux, which
 
 Importantly, python-memtools does not require the target process to have done something in the past (e.g. call a function that enables debugging or sets a signal handler), nor does it interfere with the process in any way other than pausing it while a memory snapshot is taken. This means that long-running jobs that only exhibit problematic behavior after several hours or days can be safely analyzed without killing or restarting them.
 
-python-memtools is designed to debug Python 3.10 targets, but support will be added for other Python versions in the future.
+python-memtools is designed to debug Python 3.10 targets. Experimental build-time support for Python 3.14 is available, with some commands (like stack and thread enumeration) still unsupported.
 
 ## Building
 
@@ -13,6 +13,10 @@ To build python-memtools:
 2. Install cmake and readline (`sudo apt-get install readline-dev cmake`).
 3. Build and install [phosg](https://github.com/fuzziqersoftware/phosg).
 4. Run `cmake . && make`.
+
+To build against Python 3.14 layout support:
+
+    cmake -DPYMEMTOOLS_PYTHON_VERSION=314 . && make
 
 ## Debugging with python-memtools
 
@@ -164,3 +168,9 @@ Things we'd like to do in the future:
 ## Contributing
 
 python-memtools is a work in progress. We've found it very useful so far to debug issues that other tools couldn't solve, but we're sure there are ways in which it could be even more useful. Feel free to submit GitHub issues or PRs if you have ideas on how to improve it.
+
+## Tests
+
+There are simple smoke tests for the 3.10 and 3.14 builds. They require Linux and use a helper that dumps a child process via `process_vm_readv`, so they do not require root:
+
+    tests/run_tests.py --tier all --version both
