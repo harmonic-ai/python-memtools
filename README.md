@@ -4,7 +4,7 @@ python-memtools is a memory analyzer for Python programs running on Linux, which
 
 Importantly, python-memtools does not require the target process to have done something in the past (e.g. call a function that enables debugging or sets a signal handler), nor does it interfere with the process in any way other than pausing it while a memory snapshot is taken. This means that long-running jobs that only exhibit problematic behavior after several hours or days can be safely analyzed without killing or restarting them.
 
-python-memtools is designed to debug Python 3.10 targets. Experimental build-time support for Python 3.14 is available, with some commands (like stack and thread enumeration) still unsupported.
+python-memtools is designed to debug Python 3.10 targets. Experimental build-time support for Python 3.14 is available.
 
 ## Building
 
