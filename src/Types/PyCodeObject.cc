@@ -1,14 +1,40 @@
 #include "PyCodeObject.hh"
 #include "PyStringObjects.hh"
 
-const char* PyCodeObject::invalid_reason(const Environment& env) const {
-#if PYMEMTOOLS_PYTHON_VERSION == 314
-  if (!env.r.obj_valid_or_null(this->co_consts, 1)) {
+namespace {
+
+const char* invalid_reason_common(const Environment& env, const PyCodeObject& obj) {
+  if (!env.r.obj_valid_or_null(obj.co_consts, 1)) {
     return "invalid_co_consts";
   }
-  if (!env.r.obj_valid_or_null(this->co_names, 1)) {
+  if (!env.r.obj_valid_or_null(obj.co_names, 1)) {
     return "invalid_co_names";
   }
+  if (!env.r.obj_valid_or_null(obj.co_filename, 1)) {
+    return "invalid_co_filename";
+  }
+  if (!env.r.obj_valid_or_null(obj.co_name, 1)) {
+    return "invalid_co_name";
+  }
+  if (!env.r.obj_valid_or_null(obj.co_linetable, 1)) {
+    return "invalid_co_linetable";
+  }
+  if (!env.r.obj_valid_or_null(obj.co_weakreflist, 1)) {
+    return "invalid_co_weakreflist";
+  }
+  if (!obj.co_extra.is_null() && !env.r.exists(obj.co_extra)) {
+    return "invalid_co_extra";
+  }
+  return nullptr;
+}
+
+} // namespace
+
+const char* PyCodeObject::invalid_reason(const Environment& env) const {
+  if (const char* ir = invalid_reason_common(env, *this)) {
+    return ir;
+  }
+#if PYMEMTOOLS_PYTHON_VERSION == 314
   if (!env.r.obj_valid_or_null(this->co_exceptiontable, 1)) {
     return "invalid_co_exceptiontable";
   }
@@ -18,20 +44,8 @@ const char* PyCodeObject::invalid_reason(const Environment& env) const {
   if (!env.r.obj_valid_or_null(this->co_localspluskinds, 1)) {
     return "invalid_co_localspluskinds";
   }
-  if (!env.r.obj_valid_or_null(this->co_filename, 1)) {
-    return "invalid_co_filename";
-  }
-  if (!env.r.obj_valid_or_null(this->co_name, 1)) {
-    return "invalid_co_name";
-  }
   if (!env.r.obj_valid_or_null(this->co_qualname, 1)) {
     return "invalid_co_qualname";
-  }
-  if (!env.r.obj_valid_or_null(this->co_linetable, 1)) {
-    return "invalid_co_linetable";
-  }
-  if (!env.r.obj_valid_or_null(this->co_weakreflist, 1)) {
-    return "invalid_co_weakreflist";
   }
   if (!this->co_executors.is_null() && !env.r.exists(this->co_executors)) {
     return "invalid_co_executors";
@@ -42,18 +56,9 @@ const char* PyCodeObject::invalid_reason(const Environment& env) const {
   if (!this->_co_monitoring.is_null() && !env.r.exists(this->_co_monitoring)) {
     return "invalid__co_monitoring";
   }
-  if (!this->co_extra.is_null() && !env.r.exists(this->co_extra)) {
-    return "invalid_co_extra";
-  }
 #else
   if (!env.r.obj_valid_or_null(this->co_code, 1)) {
     return "invalid_co_code";
-  }
-  if (!env.r.obj_valid_or_null(this->co_consts, 1)) {
-    return "invalid_co_consts";
-  }
-  if (!env.r.obj_valid_or_null(this->co_names, 1)) {
-    return "invalid_co_names";
   }
   if (!env.r.obj_valid_or_null(this->co_varnames, 1)) {
     return "invalid_co_varnames";
@@ -67,23 +72,8 @@ const char* PyCodeObject::invalid_reason(const Environment& env) const {
   if (!env.r.obj_valid_or_null(this->co_cell2arg, 1)) {
     return "invalid_co_cell2arg";
   }
-  if (!env.r.obj_valid_or_null(this->co_filename, 1)) {
-    return "invalid_co_filename";
-  }
-  if (!env.r.obj_valid_or_null(this->co_name, 1)) {
-    return "invalid_co_name";
-  }
-  if (!env.r.obj_valid_or_null(this->co_linetable, 1)) {
-    return "invalid_co_linetable";
-  }
   if (!this->co_zombieframe.is_null() && !env.r.exists(this->co_zombieframe)) {
     return "invalid_co_zombieframe";
-  }
-  if (!env.r.obj_valid_or_null(this->co_weakreflist, 1)) {
-    return "invalid_co_weakreflist";
-  }
-  if (!this->co_extra.is_null() && !env.r.exists(this->co_extra)) {
-    return "invalid_co_extra";
   }
   if (!env.r.obj_valid_or_null(this->co_opcache_map, 1)) {
     return "invalid_co_opcache_map";
@@ -120,6 +110,8 @@ std::string PyCodeObject::repr(Traversal& t) const {
     tokens.emplace_back(std::format("vars_config=({} locals, {} stack)", this->co_nlocals, this->co_stacksize));
     tokens.emplace_back(std::format("flags={:08X}", this->co_flags));
 #if PYMEMTOOLS_PYTHON_VERSION == 314
+    // The co_code may not exist, because starting in 3.11 Python got adaptive bytecode.
+    // Therefore we don't add it to the vector here.
     tokens.emplace_back(std::format("consts={}", t.repr(this->co_consts)));
     tokens.emplace_back(std::format("names={}", t.repr(this->co_names)));
     tokens.emplace_back(std::format("localsplusnames={}", t.repr(this->co_localsplusnames)));

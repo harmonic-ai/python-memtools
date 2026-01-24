@@ -13,9 +13,9 @@
 #include "Types/PyAsyncObjects.hh"
 #include "Types/PyGeneratorObjects.hh"
 #include "Types/PyInterpreterFrame.hh"
-#include "Types/PyVersion.hh"
 #include "Types/PyThreadState.hh"
 #include "Types/PyTypeObject.hh"
+#include "Types/PyVersion.hh"
 
 struct ShellCommand {
   std::string name;
@@ -332,6 +332,7 @@ ShellCommand c_count_by_type(
       }
     });
 
+// This is used for the validate-layouts shell command in the tests.
 ShellCommand c_validate_layouts(
     "validate-layouts", "\
   validate-layouts [OPTIONS]\n\
