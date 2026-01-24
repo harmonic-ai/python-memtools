@@ -13,6 +13,7 @@
 #include "PyStringObjects.hh"
 #include "PyTupleObject.hh"
 #include "PyTypeObject.hh"
+#include "PyVersion.hh"
 
 Environment::Environment(const std::string& data_path)
     : data_path(data_path),
@@ -48,6 +49,14 @@ void Environment::save_analysis() const {
   });
   phosg::save_file(this->analysis_filename, json.serialize());
 }
+
+// In 3.10, we assume that we are on a 64 bit machine and that the instance dict pointer is immediately
+// after the PyObject header, which holds for simple heap types that have a __dict__.
+// The PyObject itself is 16 bytes in non-debug builds (see https://github.com/python/cpython/blob/3.10/Include/object.h#L105)
+// In 3.14, it depends on whether or not the GIL is disabled or not, and is just more complicated in general
+// (see https://github.com/python/cpython/blob/3.14/Include/object.h#L110) so we don't try to use it
+// for unknown types in 3.14.
+constexpr size_t dict_heuristic_offset = 0x10;
 
 const char* Environment::invalid_reason(MappedPtr<PyObject> addr, MappedPtr<PyTypeObject> expected_type) const {
   if (addr.is_null()) {
@@ -102,7 +111,9 @@ const char* Environment::invalid_reason(MappedPtr<PyObject> addr, MappedPtr<PyTy
       return this->r.get(addr.cast<PyGenObject>()).invalid_reason(*this);
     } else if (obj.ob_type == this->get_type_if_exists("coroutine")) {
       return this->r.get(addr.cast<PyCoroObject>()).invalid_reason(*this);
-    } else if (obj.ob_type == this->get_type_if_exists("asyncgen")) { // TODO: This might be wrong
+    } else if ((obj.ob_type == this->get_type_if_exists("asyncgen")) ||
+        (obj.ob_type == this->get_type_if_exists("async_generator"))) {
+      // TODO: This might be wrong
       return this->r.get(addr.cast<PyAsyncGenObject>()).invalid_reason(*this);
 
     } else if (obj.ob_type == this->get_type_if_exists("_asyncio.Future")) {
@@ -118,8 +129,11 @@ const char* Environment::invalid_reason(MappedPtr<PyObject> addr, MappedPtr<PyTy
         return "None";
 
       } else {
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+        return nullptr;
+#else
         try {
-          auto dict_addr = this->r.get(addr.offset_bytes(0x10).cast<MappedPtr<PyDictObject>>());
+          auto dict_addr = this->r.get(addr.offset_bytes(dict_heuristic_offset).cast<MappedPtr<PyDictObject>>());
           const auto& dict_obj = this->r.get(dict_addr);
           if (dict_obj.ob_type != this->get_type_if_exists("dict")) {
             return "dict_attr_not_dict";
@@ -129,6 +143,7 @@ const char* Environment::invalid_reason(MappedPtr<PyObject> addr, MappedPtr<PyTy
         } catch (const std::out_of_range&) {
           return "dict_out_of_range";
         }
+#endif
       }
     }
   } catch (const std::out_of_range&) {
@@ -181,7 +196,8 @@ std::unordered_set<MappedPtr<void>> Environment::direct_referents(MappedPtr<PyOb
       return this->r.get(addr.cast<PyGenObject>()).direct_referents(*this);
     } else if (obj.ob_type == this->get_type_if_exists("coroutine")) {
       return this->r.get(addr.cast<PyCoroObject>()).direct_referents(*this);
-    } else if (obj.ob_type == this->get_type_if_exists("asyncgen")) { // TODO: This might be wrong
+    } else if ((obj.ob_type == this->get_type_if_exists("asyncgen")) ||
+        (obj.ob_type == this->get_type_if_exists("async_generator"))) {
       return this->r.get(addr.cast<PyAsyncGenObject>()).direct_referents(*this);
 
     } else if (obj.ob_type == this->get_type_if_exists("_asyncio.Future")) {
@@ -203,7 +219,7 @@ std::unordered_set<MappedPtr<void>> Environment::direct_referents(MappedPtr<PyOb
 
       } else {
         try {
-          auto dict_addr = this->r.get(addr.offset_bytes(0x10).cast<MappedPtr<PyDictObject>>());
+          auto dict_addr = this->r.get(addr.offset_bytes(dict_heuristic_offset).cast<MappedPtr<PyDictObject>>());
           const auto& dict_obj = this->r.get(dict_addr);
           if (dict_obj.ob_type != this->get_type_if_exists("dict")) {
             throw invalid_object("dict_attr_not_dict");
@@ -309,7 +325,8 @@ std::string Traversal::repr(MappedPtr<PyObject> addr) {
       ret = check_valid_and_repr.template operator()<PyGenObject>();
     } else if (obj.ob_type == this->env.get_type_if_exists("coroutine")) {
       ret = check_valid_and_repr.template operator()<PyCoroObject>();
-    } else if (obj.ob_type == this->env.get_type_if_exists("asyncgen")) { // TODO: This might be wrong
+    } else if ((obj.ob_type == this->env.get_type_if_exists("asyncgen")) ||
+        (obj.ob_type == this->env.get_type_if_exists("async_generator"))) {
       ret = check_valid_and_repr.template operator()<PyAsyncGenObject>();
 
     } else if (obj.ob_type == this->env.get_type_if_exists("_asyncio.Future")) {
@@ -326,12 +343,15 @@ std::string Traversal::repr(MappedPtr<PyObject> addr) {
         show_address = this->show_all_addresses || this->in_progress.empty();
 
       } else {
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+        ret = std::format("<{}>", type_name);
+#else
         try {
           // Only try to expand user type dicts if this is the root object
           if (!this->in_progress.empty()) {
             throw std::out_of_range("Not root object");
           }
-          auto dict_addr = this->env.r.get(addr.offset_bytes(0x10).cast<MappedPtr<PyDictObject>>());
+          auto dict_addr = this->env.r.get(addr.offset_bytes(dict_heuristic_offset).cast<MappedPtr<PyDictObject>>());
           const auto& dict_obj = this->env.r.get<PyDictObject>(dict_addr);
           if (dict_obj.ob_type != this->env.get_type_if_exists("dict")) {
             throw std::out_of_range("__dict__ object is not a dict");
@@ -343,6 +363,7 @@ std::string Traversal::repr(MappedPtr<PyObject> addr) {
         } catch (const std::out_of_range&) {
           ret = std::format("<{}>", type_name);
         }
+#endif
       }
     }
   } catch (const std::out_of_range&) {

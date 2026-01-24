@@ -1,5 +1,6 @@
 #pragma once
 
+#include "PyVersion.hh"
 #include "PyObject.hh"
 
 struct PyDictObject;
@@ -46,15 +47,22 @@ struct PyTypeObject : PyVarObject {
   /* 0120 */ MappedPtr<void> tp_new;
   /* 0128 */ MappedPtr<void> tp_free;
   /* 0130 */ MappedPtr<void> tp_is_gc;
-  /* 0138 */ MappedPtr<PyTupleObject> tp_bases;
+  /* 0138 */ MappedPtr<PyObject> tp_bases;
   /* 0140 */ MappedPtr<PyObject> tp_mro;
   /* 0148 */ MappedPtr<PyObject> tp_cache;
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+  /* 0150 */ MappedPtr<void> tp_subclasses;
+#else
   /* 0150 */ MappedPtr<PyTupleObject> tp_subclasses;
+#endif
   /* 0158 */ MappedPtr<PyObject> tp_weaklist;
   /* 0160 */ MappedPtr<void> tp_del;
   /* 0168 */ unsigned int tp_version_tag;
   /* 0170 */ MappedPtr<void> tp_finalize;
   /* 0178 */ MappedPtr<void> tp_vectorcall; // Not checked during invalid_reason
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+  /* 0180 */ uint8_t tp_watched;
+#endif
 
   const char* invalid_reason(const Environment& env) const;
   inline std::unordered_set<MappedPtr<void>> direct_referents(const Environment& env) const {

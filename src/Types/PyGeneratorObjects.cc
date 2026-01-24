@@ -1,6 +1,26 @@
 #include "PyGeneratorObjects.hh"
 
 const char* PyGenObject::invalid_reason(const Environment& env) const {
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+  if (!env.r.obj_valid_or_null(this->gi_weakreflist, 1)) {
+    return "invalid_gi_weakreflist";
+  }
+  if (!env.r.obj_valid_or_null(this->gi_name, 1)) {
+    return "invalid_gi_name";
+  }
+  if (!env.r.obj_valid_or_null(this->gi_qualname, 1)) {
+    return "invalid_gi_qualname";
+  }
+  if (!env.r.obj_valid_or_null(this->gi_origin_or_finalizer, 1)) {
+    return "invalid_gi_origin_or_finalizer";
+  }
+  if (static_cast<int8_t>(this->gi_frame_state) < static_cast<int8_t>(PyFrameState::FRAME_COMPLETED)) {
+    if (const char* ir = this->gi_iframe.invalid_reason(env)) {
+      return ir;
+    }
+  }
+  return this->gi_exc_state.invalid_reason(env);
+#else
   if (!env.r.obj_valid_or_null(this->gi_frame, 1)) {
     return "invalid_gi_frame";
   }
@@ -17,15 +37,25 @@ const char* PyGenObject::invalid_reason(const Environment& env) const {
     return "invalid_gi_qualname";
   }
   return this->gi_exc_state.invalid_reason(env);
+#endif
 }
 
 std::unordered_set<MappedPtr<void>> PyGenObject::direct_referents(const Environment& env) const {
   auto ret = this->gi_exc_state.direct_referents(env);
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+  ret.emplace(this->gi_weakreflist);
+  ret.emplace(this->gi_name);
+  ret.emplace(this->gi_qualname);
+  ret.emplace(this->gi_origin_or_finalizer);
+  auto iframe_refs = this->gi_iframe.direct_referents(env);
+  ret.insert(iframe_refs.begin(), iframe_refs.end());
+#else
   ret.emplace(this->gi_frame);
   ret.emplace(this->gi_code);
   ret.emplace(this->gi_weakreflist);
   ret.emplace(this->gi_name);
   ret.emplace(this->gi_qualname);
+#endif
   return ret;
 }
 
@@ -40,12 +70,20 @@ std::vector<std::string> PyGenObject::repr_tokens(Traversal& t) const {
   if (!this->gi_exc_state.exc_value.is_null()) {
     tokens.emplace_back(std::format("exc_value={}", t.repr(this->gi_exc_state.exc_value)));
   }
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+  tokens.emplace_back(std::format("frame_state={}", static_cast<int>(this->gi_frame_state)));
+  tokens.emplace_back(std::format("frame={}", this->gi_iframe.repr(t)));
+  if (!this->gi_origin_or_finalizer.is_null()) {
+    tokens.emplace_back(std::format("origin_or_finalizer={}", t.repr(this->gi_origin_or_finalizer)));
+  }
+#else
   if (!this->gi_frame.is_null()) {
     tokens.emplace_back(std::format("frame={}", t.repr(this->gi_frame)));
   }
   if (!this->gi_code.is_null()) {
     tokens.emplace_back(std::format("code={}", t.repr(this->gi_code)));
   }
+#endif
   if (!this->gi_weakreflist.is_null()) {
     tokens.emplace_back(std::format("weakreflist={}", t.repr(this->gi_weakreflist)));
   }
@@ -57,29 +95,43 @@ std::string PyGenObject::repr(Traversal& t) const {
 }
 
 const char* PyCoroObject::invalid_reason(const Environment& env) const {
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+  return this->PyGenObject::invalid_reason(env);
+#else
   if (!env.r.obj_valid_or_null(this->cr_origin, 1)) {
     return "invalid_cr_origin";
   }
   return this->PyGenObject::invalid_reason(env);
+#endif
 }
 
 std::unordered_set<MappedPtr<void>> PyCoroObject::direct_referents(const Environment& env) const {
   auto ret = this->PyGenObject::direct_referents(env);
+#if PYMEMTOOLS_PYTHON_VERSION != 314
   ret.emplace(this->cr_origin);
+#endif
   return ret;
 }
 
 std::vector<std::string> PyCoroObject::repr_tokens(Traversal& t) const {
   std::vector<std::string> tokens = this->PyGenObject::repr_tokens(t);
+#if PYMEMTOOLS_PYTHON_VERSION != 314
   if (!this->cr_origin.is_null()) {
     tokens.emplace_back(std::format("origin={}", t.repr(this->cr_origin)));
   }
+#endif
   return tokens;
 }
 
 std::string PyCoroObject::repr(Traversal& t) const {
   if (t.is_short) {
     auto name = t.repr(this->gi_qualname);
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+    if (static_cast<int8_t>(this->gi_frame_state) < static_cast<int8_t>(PyFrameState::FRAME_COMPLETED)) {
+      return std::format("<coroutine {} {}>", name, this->gi_iframe.repr(t));
+    }
+    return std::format("<coroutine {} (completed)>", name);
+#else
     if (!this->gi_frame.is_null()) {
       const auto& frame = t.env.r.get(this->gi_frame);
       if (const char* ir = frame.invalid_reason(t.env)) {
@@ -91,29 +143,38 @@ std::string PyCoroObject::repr(Traversal& t) const {
     } else {
       return std::format("<coroutine {} (no frame)>", name);
     }
+#endif
   } else {
     return t.token_repr(*this, "coroutine");
   }
 }
 
 const char* PyAsyncGenObject::invalid_reason(const Environment& env) const {
+#if PYMEMTOOLS_PYTHON_VERSION == 314
+  return this->PyGenObject::invalid_reason(env);
+#else
   if (!env.r.obj_valid_or_null(this->ag_finalizer, 1)) {
     return "invalid_ag_finalizer";
   }
   return this->PyGenObject::invalid_reason(env);
+#endif
 }
 
 std::unordered_set<MappedPtr<void>> PyAsyncGenObject::direct_referents(const Environment& env) const {
   auto ret = this->PyGenObject::direct_referents(env);
+#if PYMEMTOOLS_PYTHON_VERSION != 314
   ret.emplace(this->ag_finalizer);
+#endif
   return ret;
 }
 
 std::vector<std::string> PyAsyncGenObject::repr_tokens(Traversal& t) const {
   std::vector<std::string> tokens = this->PyGenObject::repr_tokens(t);
+#if PYMEMTOOLS_PYTHON_VERSION != 314
   if (!this->ag_finalizer.is_null()) {
     tokens.emplace_back(std::format("finalizer=", t.repr(this->ag_finalizer)));
   }
+#endif
   return tokens;
 }
 
