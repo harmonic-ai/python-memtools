@@ -10,7 +10,7 @@ python-memtools is designed to debug Python 3.10 targets, but support will be ad
 
 To build python-memtools:
 1. Ensure your C++ compiler has full C++23 support. GCC 13+ should suffice, as well as recent Clang versions.
-2. Install cmake and readline (`sudo apt-get install readline-dev cmake`).
+2. Install cmake and readline (`sudo apt-get install libreadline-dev cmake`).
 3. Build and install [phosg](https://github.com/fuzziqersoftware/phosg).
 4. Run `cmake . && make`.
 
