@@ -63,3 +63,5 @@ struct DecodedString {
   size_t excess_bytes; // Always 0 unless max_len > 0 and the string is longer than max_len
 };
 DecodedString decode_string_types(const MemoryReader& r, MappedPtr<PyObject> addr, size_t max_len = 0);
+
+std::string escape_string_data(const void* data, size_t size, bool is_str, size_t excess_bytes = 0);

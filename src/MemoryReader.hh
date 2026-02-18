@@ -46,11 +46,9 @@ struct MappedPtr {
     requires std::convertible_to<U*, T*>
   MappedPtr(const MappedPtr<U>& other) : addr(other.addr) {}
 
-  template <typename U, typename V = T>
-  MappedPtr<U> offset_t(ssize_t delta) const {
-    return MappedPtr<U>{this->addr + delta * sizeof(T)};
+  MappedPtr<T> offset(ssize_t delta) const {
+    return MappedPtr<T>{this->addr + delta * sizeof(T)};
   }
-
   MappedPtr<T> offset_bytes(ssize_t bytes) const {
     return MappedPtr<T>{this->addr + bytes};
   }

@@ -1,7 +1,7 @@
 #include "PyStringObjects.hh"
 #include "Base.hh"
 
-static std::string escape_string(const void* data, size_t size, bool is_str, size_t excess_bytes = 0) {
+std::string escape_string_data(const void* data, size_t size, bool is_str, size_t excess_bytes) {
   std::string ret;
   if (!is_str) {
     ret.push_back('b');
@@ -111,7 +111,7 @@ DecodedString decode_string_types(const MemoryReader& r, MappedPtr<PyObject> add
 static std::string repr_string_types(Traversal& t, MappedPtr<PyObject> addr) {
   try {
     auto ret = decode_string_types(t.env.r, addr, t.max_string_length);
-    return escape_string(ret.data.data(), ret.data.size(), true, ret.excess_bytes);
+    return escape_string_data(ret.data.data(), ret.data.size(), true, ret.excess_bytes);
   } catch (const invalid_object& e) {
     return std::format("<str !{}>", e.reason);
   }
@@ -159,7 +159,7 @@ std::string PyBytesObject::repr(Traversal& t) const {
         excess_bytes = r.size() - t.max_string_length;
         r.truncate(t.max_string_length);
       }
-      ret = escape_string(r.getv(r.size()), r.size(), false, excess_bytes);
+      ret = escape_string_data(r.getv(r.size()), r.size(), false, excess_bytes);
     }
     return ret;
   } catch (const std::out_of_range&) {

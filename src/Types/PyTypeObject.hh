@@ -5,6 +5,17 @@
 struct PyDictObject;
 struct PyTupleObject;
 
+struct PyMemberDef {
+  /* 00 */ MappedPtr<char> name;
+  /* 08 */ int type;
+  /* 10 */ ssize_t offset;
+  /* 18 */ int flags;
+  /* 20 */ MappedPtr<char> doc;
+  /* 28 */
+
+  std::string repr(const MemoryReader& r) const;
+};
+
 // See struct _typeobject in https://github.com/python/cpython/blob/3.10/Include/cpython/object.h
 struct PyTypeObject : PyVarObject {
   /* 0000 */ MappedPtr<char> tp_name;
@@ -34,7 +45,7 @@ struct PyTypeObject : PyVarObject {
   /* 00C0 */ MappedPtr<void> tp_iter;
   /* 00C8 */ MappedPtr<void> tp_iternext;
   /* 00D0 */ MappedPtr<void> tp_methods; // PyMethodDef*
-  /* 00D8 */ MappedPtr<void> tp_members; // PyMemberDef*
+  /* 00D8 */ MappedPtr<PyMemberDef> tp_members;
   /* 00E0 */ MappedPtr<void> tp_getset; // PyGetSetDef*
   /* 00E8 */ MappedPtr<PyTypeObject> tp_base;
   /* 00F0 */ MappedPtr<PyDictObject> tp_dict;
@@ -71,4 +82,7 @@ struct PyTypeObject : PyVarObject {
 
   static bool type_name_is_valid(const std::string& name);
   std::string name(const MemoryReader& r) const;
+
+  // Returns [(name, offset)]
+  std::vector<std::pair<std::string, ssize_t>> slots(const MemoryReader& r) const;
 };

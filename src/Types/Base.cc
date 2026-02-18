@@ -119,12 +119,25 @@ const char* Environment::invalid_reason(MappedPtr<PyObject> addr, MappedPtr<PyTy
 
       } else {
         try {
-          auto dict_addr = this->r.get(addr.offset_bytes(0x10).cast<MappedPtr<PyDictObject>>());
-          const auto& dict_obj = this->r.get(dict_addr);
-          if (dict_obj.ob_type != this->get_type_if_exists("dict")) {
-            return "dict_attr_not_dict";
+          auto slots = type_obj.slots(this->r);
+          if (!slots.empty()) {
+            for (const auto& [name, offset] : slots) {
+              auto obj_ptr = this->r.get(addr.offset_bytes(offset).cast<MappedPtr<PyObject>>());
+              const char* ir = this->r.get(obj_ptr).invalid_reason(*this);
+              if (ir) {
+                return ir;
+              }
+            }
+            return nullptr;
+
+          } else {
+            auto dict_addr = this->r.get(addr.offset_bytes(0x10).cast<MappedPtr<PyDictObject>>());
+            const auto& dict_obj = this->r.get(dict_addr);
+            if (dict_obj.ob_type != this->get_type_if_exists("dict")) {
+              return "dict_attr_not_dict";
+            }
+            return dict_obj.invalid_reason(*this);
           }
-          return dict_obj.invalid_reason(*this);
 
         } catch (const std::out_of_range&) {
           return "dict_out_of_range";
@@ -203,15 +216,25 @@ std::unordered_set<MappedPtr<void>> Environment::direct_referents(MappedPtr<PyOb
 
       } else {
         try {
-          auto dict_addr = this->r.get(addr.offset_bytes(0x10).cast<MappedPtr<PyDictObject>>());
-          const auto& dict_obj = this->r.get(dict_addr);
-          if (dict_obj.ob_type != this->get_type_if_exists("dict")) {
-            throw invalid_object("dict_attr_not_dict");
+          auto slots = type_obj.slots(this->r);
+          if (!slots.empty()) {
+            std::unordered_set<MappedPtr<void>> ret;
+            for (const auto& [name, offset] : slots) {
+              ret.emplace(this->r.get(addr.offset_bytes(offset).cast<MappedPtr<PyObject>>()));
+            }
+            return ret;
+
+          } else {
+            auto dict_addr = this->r.get(addr.offset_bytes(0x10).cast<MappedPtr<PyDictObject>>());
+            const auto& dict_obj = this->r.get(dict_addr);
+            if (dict_obj.ob_type != this->get_type_if_exists("dict")) {
+              throw invalid_object("dict_attr_not_dict");
+            }
+            if (const char* ir = dict_obj.invalid_reason(*this)) {
+              throw invalid_object(ir);
+            }
+            return dict_obj.direct_referents(*this);
           }
-          if (const char* ir = dict_obj.invalid_reason(*this)) {
-            throw invalid_object(ir);
-          }
-          return dict_obj.direct_referents(*this);
 
         } catch (const std::out_of_range&) {
           throw invalid_object("dict_out_of_range");
@@ -328,18 +351,31 @@ std::string Traversal::repr(MappedPtr<PyObject> addr) {
 
       } else {
         try {
-          // Only try to expand user type dicts if this is the root object
-          if (!this->in_progress.empty()) {
-            throw std::out_of_range("Not root object");
+          auto slots = type_obj.slots(this->env.r);
+          if (!slots.empty()) {
+            std::string indent_str(this->recursion_depth * 2, ' ');
+            ret = std::format("<{} __slots__\n", type_name);
+            auto cycle_guard = this->cycle_guard(&this->env.r.get(addr));
+            for (const auto& [name, offset] : slots) {
+              auto obj_ptr = this->env.r.get(addr.offset_bytes(offset).cast<MappedPtr<PyObject>>());
+              ret += std::format("{}  (+0x{:X}) {} = {}\n", indent_str, offset, name, this->repr(obj_ptr));
+            }
+            ret += std::format("{}>", indent_str);
+
+          } else {
+            //  Only try to expand user type dicts if this is the root object
+            if (!this->in_progress.empty()) {
+              throw std::out_of_range("Not root object");
+            }
+            auto dict_addr = this->env.r.get(addr.offset_bytes(0x10).cast<MappedPtr<PyDictObject>>());
+            const auto& dict_obj = this->env.r.get<PyDictObject>(dict_addr);
+            if (dict_obj.ob_type != this->env.get_type_if_exists("dict")) {
+              throw std::out_of_range("__dict__ object is not a dict");
+            }
+            auto cycle_guard = this->cycle_guard(&this->env.r.get(addr));
+            std::string dict_repr = this->repr(dict_addr);
+            ret = std::format("<{} {}>", type_name, dict_repr);
           }
-          auto dict_addr = this->env.r.get(addr.offset_bytes(0x10).cast<MappedPtr<PyDictObject>>());
-          const auto& dict_obj = this->env.r.get<PyDictObject>(dict_addr);
-          if (dict_obj.ob_type != this->env.get_type_if_exists("dict")) {
-            throw std::out_of_range("__dict__ object is not a dict");
-          }
-          auto cycle_guard = this->cycle_guard(&this->env.r.get(addr));
-          std::string dict_repr = this->repr(dict_addr);
-          ret = std::format("<{} {}>", type_name, dict_repr);
 
         } catch (const std::out_of_range&) {
           ret = std::format("<{}>", type_name);
