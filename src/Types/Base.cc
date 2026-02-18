@@ -233,6 +233,7 @@ Traversal::Traversal(const Environment& env, phosg::Arguments* args) : env(env) 
     this->max_entries = args->get<size_t>("max-entries", this->max_entries);
     this->max_string_length = args->get<size_t>("max-string-length", this->max_string_length);
     this->frame_omit_back = args->get<bool>("frame-omit-back");
+    this->frame_omit_locals = args->get<bool>("frame-omit-locals");
     this->bytes_as_hex = args->get<bool>("bytes-as-hex");
     this->show_all_addresses = args->get<bool>("show-all-addresses");
     this->is_short = args->get<bool>("short");

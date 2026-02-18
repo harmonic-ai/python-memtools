@@ -442,8 +442,8 @@ ShellCommand c_find_module(
 
         try {
           MappedPtr<PyObject> name_addr = dict_obj.value_for_key<PyObject>(shell.env.r, "__name__");
-          auto name = decode_string_types(shell.env.r, name_addr);
-          if (name != module_name) {
+          auto name_dec = decode_string_types(shell.env.r, name_addr);
+          if (name_dec.data != module_name) {
             return;
           }
         } catch (const std::out_of_range&) {
@@ -517,6 +517,7 @@ ShellCommand c_find_all_stacks(
 
             auto t = shell.env.traverse(&args);
             t.max_recursion_depth = 1;
+            t.frame_omit_locals = true;
             std::string repr = t.repr(addr);
             if (!t.is_valid) {
               return;
@@ -599,8 +600,8 @@ void fn_aggregate_strings(AnalysisShell& shell, phosg::Arguments& args) {
       if constexpr (IsBytes) {
         data_size = shell.env.r.get(addr.cast<PyBytesObject>()).ob_size;
       } else {
-        // TODO: This is slow; make a function that gets the size without decoding/copying the data
-        data_size = decode_string_types(shell.env.r, addr).size();
+        auto data_dec = decode_string_types(shell.env.r, addr, 1);
+        data_size = data_dec.data.size() + data_dec.excess_bytes;
       }
     } catch (const std::exception&) {
       return;

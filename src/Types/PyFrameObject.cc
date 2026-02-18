@@ -157,20 +157,22 @@ std::vector<std::string> PyFrameObject::repr_tokens(Traversal& t) const {
     tokens.emplace_back(std::format("f_lineno={}", this->f_lineno));
     tokens.emplace_back(std::format("f_iblock={}", this->f_iblock));
 
-    try {
-      std::vector<std::string> locals_entries;
-      locals_entries.emplace_back("locals:");
-      auto indent = t.indent();
-      for (auto [name_addr, value_addr] : this->locals(t.env)) {
-        locals_entries.emplace_back(std::format("  {} = {}", t.repr(name_addr), t.repr(value_addr)));
+    if (!t.frame_omit_locals) {
+      try {
+        std::vector<std::string> locals_entries;
+        locals_entries.emplace_back("locals:");
+        auto indent = t.indent();
+        for (auto [name_addr, value_addr] : this->locals(t.env)) {
+          locals_entries.emplace_back(std::format("  {} = {}", t.repr(name_addr), t.repr(value_addr)));
+        }
+        std::sort(locals_entries.begin() + 1, locals_entries.end());
+        tokens.insert(
+            tokens.end(),
+            std::make_move_iterator(locals_entries.begin()),
+            std::make_move_iterator(locals_entries.end()));
+      } catch (const std::exception& e) {
+        tokens.emplace_back(std::format("locals=!({})", e.what()));
       }
-      std::sort(locals_entries.begin() + 1, locals_entries.end());
-      tokens.insert(
-          tokens.end(),
-          std::make_move_iterator(locals_entries.begin()),
-          std::make_move_iterator(locals_entries.end()));
-    } catch (const std::exception& e) {
-      tokens.emplace_back(std::format("locals=!({})", e.what()));
     }
   }
 

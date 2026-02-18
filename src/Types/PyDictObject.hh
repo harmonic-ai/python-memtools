@@ -59,8 +59,8 @@ struct PyDictObject : PyObject {
     // TODO: This is slow. We should only call get_items when we actually need all the items.
     for (auto it : this->get_items(r)) {
       try {
-        std::string key_str = decode_string_types(r, it.first);
-        if (key_str == key) {
+        DecodedString key_dec = decode_string_types(r, it.first);
+        if (key_dec.data == key) {
           return it.second.cast<T>();
         }
       } catch (const invalid_object&) {

@@ -58,4 +58,8 @@ struct PyGeneralStringObject : PyCompactStringObject {
 
 // Returns a copy of the UTF-8 data associated with a string, regardless of what format is actually stored in memory.
 // For bytes objects, use PyBytesObject::read_contents instead.
-std::string decode_string_types(const MemoryReader& r, MappedPtr<PyObject> addr);
+struct DecodedString {
+  std::string data;
+  size_t excess_bytes; // Always 0 unless max_len > 0 and the string is longer than max_len
+};
+DecodedString decode_string_types(const MemoryReader& r, MappedPtr<PyObject> addr, size_t max_len = 0);

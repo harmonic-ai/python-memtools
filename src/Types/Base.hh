@@ -64,6 +64,7 @@ struct Traversal {
   ssize_t max_entries = -1;
   size_t max_string_length = 0x400; // 1KB
   bool frame_omit_back = false;
+  bool frame_omit_locals = false;
   bool bytes_as_hex = false;
   bool show_all_addresses = false;
   bool is_valid = true;
