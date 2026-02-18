@@ -7,8 +7,8 @@ itself to create the snapshot, since the process implemented there is much more 
 
 This script can also be used to make a memory dump in places where there isn't enough space on disk to save it, such as
 a GKE pod with limited ephemeral storage. To do this, you need to forward stdout in binary mode through e.g. an SSH
-session, then save it to disk on the client, like this:
-  kubectl exec -it POD-NAME -c DEBUG-CONTAINER -- python3 dump_memory.py --pid PID --stream > memdump.bin
+session, then save it to disk on the client, like this (you will have to copy):
+  kubectl exec POD-NAME -c DEBUG-CONTAINER -- python3 dump_memory.py --pid PID --stream > memdump.bin
 
 """
 
