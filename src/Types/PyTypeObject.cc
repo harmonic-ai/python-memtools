@@ -256,7 +256,10 @@ std::string PyTypeObject::repr(Traversal& t) const {
     }
     lines.emplace_back(std::format("{}  tp_getset={}", indent_str, this->tp_getset)); // TODO: Parse as PyGetSetDef*
     lines.emplace_back(std::format("{}  tp_base={}", indent_str, t.repr(this->tp_base)));
+    size_t prev_max_recursion_depth = t.max_recursion_depth;
+    t.max_recursion_depth = 2;
     lines.emplace_back(std::format("{}  tp_dict={}", indent_str, t.repr(this->tp_dict)));
+    t.max_recursion_depth = prev_max_recursion_depth;
     lines.emplace_back(std::format("{}  tp_descr_get={}", indent_str, this->tp_descr_get));
     lines.emplace_back(std::format("{}  tp_descr_set={}", indent_str, this->tp_descr_set));
     lines.emplace_back(std::format("{}  tp_dictoffset={}", indent_str, this->tp_dictoffset));
