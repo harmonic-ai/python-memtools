@@ -208,7 +208,7 @@ void MemoryReader::dump(uint64_t pid, const std::string& directory, size_t max_t
 
   auto total_size_str = phosg::format_size(total_size);
   phosg::scoped_fd mem_fd(std::format("/proc/{}/mem", pid), O_RDONLY);
-  phosg::parallel_range<uint64_t>([&](uint64_t range_index, size_t) -> bool {
+  phosg::parallel<uint64_t>([&](uint64_t range_index, size_t) -> bool {
     const auto& [addr, size] = ranges[range_index];
 
     auto out_f = phosg::fopen_unique(std::format("{}/mem.{}.{}.bin", directory, addr, addr.offset_bytes(size)), "wb");
